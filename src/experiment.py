@@ -7,32 +7,39 @@ from src.metrics import calculate_performance_metrics
 
 def parameter_sensitivity_analysis(
     prices,
+    backtest_function,
+    factor_1_name,
+    factor_2_name,
+    factor_1_weight_name,
+    factor_2_weight_name,
     weights=np.arange(0, 1.01, 0.1)
 ):
     """
-    Evaluate different momentum/low-volatility weight combinations.
+    Evaluate different weight combinations between two factors.
     """
 
     results = []
     portfolios = {}
 
-    for momentum_weight in weights:
+    for factor_1_weight in weights:
 
-        low_vol_weight = 1 - momentum_weight
+        factor_2_weight = 1 - factor_1_weight
 
-        portfolio, _ = run_momentum_low_vol_backtest(
+        portfolio, _ = backtest_function(
             prices,
-            momentum_weight=momentum_weight,
-            low_vol_weight=low_vol_weight
+            **{
+                factor_1_weight_name: factor_1_weight,
+                factor_2_weight_name: factor_2_weight
+            }
         )
 
-        portfolios[momentum_weight] = portfolio
+        portfolios[factor_1_weight] = portfolio
 
         metrics = calculate_performance_metrics(portfolio)
 
         results.append({
-            "Momentum Weight": momentum_weight,
-            "Low Vol Weight": low_vol_weight,
+            f"{factor_1_name} Weight": factor_1_weight,
+            f"{factor_2_name} Weight": factor_2_weight,
             **metrics.to_dict()
         })
 

@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import yfinance as yf
 
 
 def calculate_momentum(prices: pd.DataFrame, lookback: int = 252) -> pd.DataFrame:
@@ -39,3 +40,65 @@ def zscore_factor(signal: pd.Series) -> pd.Series:
     Higher z-score = better, assuming the factor is already oriented correctly.
     """
     return (signal - signal.mean()) / signal.std()
+
+
+
+def calculate_pe_ratio(tickers):
+    """
+    Download trailing P/E ratios for a list of tickers.
+    """
+
+    pe_ratios = {}
+
+    for ticker in tickers:
+
+        stock = yf.Ticker(ticker)
+
+        info = stock.info
+
+        pe_ratios[ticker] = info.get(
+            "trailingPE",
+            None
+        )
+
+    return pd.Series(pe_ratios)
+
+def combine_factors(
+    factors,
+    weights=None
+):
+    """
+    Combine multiple standardized factors.
+
+    Parameters
+    ----------
+    factors : dict
+        Dictionary of factor name -> z-score Series
+
+    weights : dict
+        Dictionary of factor name -> weight
+
+    Returns
+    -------
+    pd.Series
+        Combined factor score.
+    """
+
+    if weights is None:
+        weights = {
+            name: 1 / len(factors)
+            for name in factors
+        }
+
+    combined = None
+
+    for name, factor in factors.items():
+
+        weighted_factor = weights[name] * factor
+
+        if combined is None:
+            combined = weighted_factor
+        else:
+            combined += weighted_factor
+
+    return combined

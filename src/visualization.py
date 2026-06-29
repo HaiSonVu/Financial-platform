@@ -3,13 +3,17 @@ import matplotlib.pyplot as plt
 
 def plot_parameter_sensitivity(
     results,
-    metric
+    metric,
+    title=None
 ):
     """
     Plot a performance metric against momentum weight.
     """
 
-    fig, ax = plt.subplots(figsize=(8,5))
+    if title is None:
+        title = f"{metric} vs Momentum Weight"
+
+    fig, ax = plt.subplots(figsize=(8, 5))
 
     ax.plot(
         results["Momentum Weight"],
@@ -17,17 +21,11 @@ def plot_parameter_sensitivity(
         marker="o"
     )
 
-    ax.set_title(
-        f"{metric} vs Momentum Weight"
-    )
+    ax.set_title(title)
 
-    ax.set_xlabel(
-        "Momentum Weight"
-    )
+    ax.set_xlabel("Momentum Weight")
 
-    ax.set_ylabel(
-        metric
-    )
+    ax.set_ylabel(metric)
 
     ax.grid(True)
 
