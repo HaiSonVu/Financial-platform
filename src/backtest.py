@@ -191,76 +191,84 @@ def run_momentum_low_vol_backtest(
     return portfolio, holdings_history
 
 
+
 def run_factor_backtest(
-    prices,
-    score_function,
-    top_n=5,
-    strategy_name="Factor Strategy"
+    prices, score_function, top_n=5, strategy_name="Factor Strategy",
+    transaction_cost_bps=0, weighting="equal", volatility_window=252,
 ):
-    returns = prices.pct_change()
+    """Monthly buy-and-hold, trading at the close used to calculate the signal.
+
+    The rate is charged on each dollar bought or sold, including initial buys.
+    Trades and costs are fractions of pre-trade wealth; target weights describe
+    post-cost wealth. Calendar month-end labels use the last available close.
+    Missing selected prices are errors rather than silently assumed flat.
+    """
+    if not prices.index.is_monotonic_increasing or not prices.index.is_unique:
+        raise ValueError("Prices must have a sorted, unique date index")
+    if not 0 <= transaction_cost_bps < 10000 or top_n < 1:
+        raise ValueError("top_n must be positive and transaction_cost_bps in [0, 10000)")
+    if weighting not in ("equal", "inverse_volatility"):
+        raise ValueError("weighting must be equal or inverse_volatility")
+    returns = prices.pct_change(fill_method=None)
     month_ends = prices.resample("ME").last().index
-
-    portfolio_returns = []
-    portfolio_dates = []
-    holdings_records = []
-
+    records, holdings_records, portfolio_returns, dates = [], [], [], []
+    previous = pd.Series(0.0, index=prices.columns)
     for i in range(12, len(month_ends) - 1):
-        formation_date = month_ends[i]
-        next_date = month_ends[i + 1]
-
+        formation_date, next_date = month_ends[i:i+2]
         current_prices = prices.loc[:formation_date]
         current_returns = returns.loc[:formation_date]
-
-        scores = score_function(
-            current_prices=current_prices,
-            current_returns=current_returns,
-            formation_date=formation_date
-        )
-
-        selected_stocks = select_top_n(
-            scores,
-            n=top_n
-        )
-
-        holdings_records.append({
-            "formation_date": formation_date,
-            "holding_until": next_date,
-            "holdings": list(selected_stocks)
-        })
-
-        weights = np.repeat(
-            1 / len(selected_stocks),
-            len(selected_stocks)
-        )
-
-        holding_period = returns.loc[
-            returns.index[
-                (returns.index > formation_date)
-                & (returns.index <= next_date)
-            ],
-            selected_stocks
-        ]
-
-        daily_portfolio_return = (
-            holding_period * weights
-        ).sum(axis=1)
-
-        monthly_return = (
-            1 + daily_portfolio_return
-        ).prod() - 1
-
-        portfolio_returns.append(monthly_return)
-        portfolio_dates.append(next_date)
-
-    portfolio = pd.Series(
-        portfolio_returns,
-        index=portfolio_dates,
-        name=strategy_name
-    )
-
-    holdings_history = pd.DataFrame(holdings_records)
-
-    return portfolio, holdings_history
+        scores = score_function(current_prices=current_prices,
+                                current_returns=current_returns,
+                                formation_date=formation_date)
+        selected = select_top_n(scores, n=top_n)
+        if len(selected) == 0:
+            raise ValueError(f"No eligible stocks at {formation_date}")
+        target = pd.Series(0.0, index=prices.columns)
+        if weighting == "equal":
+            target.loc[selected] = 1 / len(selected)
+        else:
+            vol = current_returns.loc[:, selected].tail(volatility_window).std()
+            if vol.isna().any() or (vol <= 0).any() or len(current_returns.tail(volatility_window)) < volatility_window:
+                raise ValueError(f"Insufficient or zero volatility at {formation_date}")
+            inverse = 1 / vol
+            target.loc[selected] = inverse / inverse.sum()
+        if current_prices.loc[:, selected].iloc[-1].isna().any():
+            raise ValueError(f"Missing formation price at {formation_date}")
+        # Solve self-financing equation: post-cost wealth + fee = pre-trade wealth.
+        rate = transaction_cost_bps / 10000
+        low, high = 0.0, 1.0
+        for _ in range(60):
+            mid = (low + high) / 2
+            if mid + rate * (mid * target - previous).abs().sum() > 1:
+                high = mid
+            else:
+                low = mid
+        net_fraction = (low + high) / 2
+        trades = net_fraction * target - previous
+        buys, sells = trades.clip(lower=0).sum(), -trades.clip(upper=0).sum()
+        cost = rate * (buys + sells)
+        period = returns.loc[(returns.index > formation_date) & (returns.index <= next_date), selected]
+        if period.empty or period.isna().any().any():
+            raise ValueError(f"Missing holding-period returns after {formation_date}")
+        growth = (1 + period).prod()
+        gross_growth = (target.loc[selected] * growth).sum()
+        if gross_growth <= 0:
+            raise ValueError("Portfolio wealth must remain positive")
+        previous = pd.Series(0.0, index=prices.columns)
+        previous.loc[selected] = target.loc[selected] * growth / gross_growth
+        gross_return = gross_growth - 1
+        net_return = net_fraction * gross_growth - 1
+        holdings_records.append({"formation_date": formation_date, "holding_until": next_date,
+                                 "holdings": list(selected), "target_weights": target[target > 0].to_dict(),
+                                 "ending_weights": previous[previous > 0].to_dict()})
+        records.append({"formation_date": formation_date, "holding_until": next_date,
+                        "turnover": 0.5 * (buys + sells), "buys": buys, "sells": sells,
+                        "gross_traded_value": buys + sells, "transaction_cost": cost,
+                        "gross_return": gross_return, "net_return": net_return})
+        portfolio_returns.append(net_return)
+        dates.append(next_date)
+    return (pd.Series(portfolio_returns, index=pd.DatetimeIndex(dates), name=strategy_name),
+            pd.DataFrame(holdings_records), pd.DataFrame(records))
 
 
 def momentum_score(
@@ -336,3 +344,30 @@ def momentum_value_score(
     )
 
     return scores.dropna()
+
+
+def create_equal_weights(selected_stocks, universe):
+    """
+    Create a portfolio-weight Series over the full stock universe.
+
+    Selected stocks receive equal weights.
+    Unselected stocks receive weight zero.
+    """
+    weights = pd.Series(0.0, index=universe)
+
+    weights.loc[selected_stocks] = 1 / len(selected_stocks)
+
+    return weights
+
+
+def calculate_turnover(
+    current_weights,
+    previous_weights
+):
+    """
+    Calculate one-way portfolio turnover.
+    """
+    return 0.5 * (
+        current_weights - previous_weights
+    ).abs().sum()
+

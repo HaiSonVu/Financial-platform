@@ -13,7 +13,7 @@ def calculate_drawdown(growth: pd.Series) -> pd.Series:
     """
     Calculate drawdown from previous peak.
     """
-    running_max = growth.cummax()
+    running_max = growth.cummax().clip(lower=1.0)
 
     return (
         growth - running_max
@@ -36,9 +36,7 @@ def calculate_performance_metrics(
 
     sharpe = annual_return / annual_vol
 
-    years = (
-        returns.index[-1] - returns.index[0]
-    ).days / 365.25
+    years = len(returns) / 12
 
     cagr = growth.iloc[-1] ** (1 / years) - 1
 
