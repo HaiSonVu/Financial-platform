@@ -1,0 +1,20 @@
+{
+  "retrieved_utc": "2026-11-19T02:53:53.794262+00:00",
+  "source": "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
+  "source_html_sha256": "65b4655b8384efe585fd3f43951538c263c5fe48128ace42ff89cc604d4c5cf4",
+  "universe": "current S&P 500 snapshot; not historical membership",
+  "price_source": "Yahoo Finance via yfinance; adjusted close",
+  "yfinance_version": "1.4.1",
+  "start_inclusive": "2010-01-01",
+  "end_exclusive": "2025-01-01",
+  "requested_symbols": 503,
+  "symbols_with_no_prices": [
+    "FDXF",
+    "HONA",
+    "Q",
+    "SNDK",
+    "VYLR"
+  ],
+  "rows": 3774,
+  "disclaimer": "Survivorship bias, ticker changes, revised adjustments, and incomplete coverage remain."
+}

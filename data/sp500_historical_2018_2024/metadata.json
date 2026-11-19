@@ -1,0 +1,13 @@
+{
+  "source_repository": "https://github.com/Johnbrick123/sp500-data",
+  "source_commit": "25b21604fdd167824c32370070232971c0391de0",
+  "members_url": "https://github.com/Johnbrick123/sp500-data/releases/download/data/members.parquet",
+  "prices_url": "https://github.com/Johnbrick123/sp500-data/releases/download/data/prices.parquet",
+  "raw_members_sha256": "77624e5a6671a4ac4ccb0c3f09ac5fc5cd51805880ce954e7fe7bf1fdef48a8c",
+  "raw_prices_sha256": "02ed2e4f3fd409f1a2e3ecd9d7c8a54e26b85d15a521e022b351868b75f07ddc",
+  "membership_extract_sha256": "c7b0e025525a0c338ef792cfd07c61b5a528cc1bed02abf643fa6a91116f1a29",
+  "prices_extract_sha256": "8e44a8bb718f33570ae2d9de4fb74a0685fdf8f6d208dffb3c56e6a4d425fba7",
+  "interval": "2018-01-01 through 2024-12-31; plus the latest pre-2018 membership snapshot",
+  "retrieved_utc": "2026-11-19",
+  "caveat": "Community reconstructed membership and multiple price sources; data accuracy, ticker identities, delisting proceeds and corporate actions require independent verification."
+}

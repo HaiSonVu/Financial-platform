@@ -1,238 +1,70 @@
 # Multi-Factor Equity Strategy Backtester
 
-A Python-based quantitative finance project that builds and evaluates factor-based equity strategies using historical stock price data.
+An educational Python project for researching factor strategies, realistic portfolio backtests, and eventually machine-learning stock models. Historical results are exploratory, not financial advice.
 
-The project starts with a simple momentum strategy, then expands into a multi-factor framework using momentum, low volatility, and value signals. The goal is to test whether factor-based stock selection can outperform SPY on a risk-adjusted basis.
+## Project and data
 
----
+- `src/` contains data loading, factor scores, backtesting, metrics, experiments, and visualization.
+- `notebooks/01`–`07` contain the original Phase 1–2 work. `08` is the superseded cost experiment, `09` is the corrected Phase 3 evaluation, and `10` explores the larger Phase 4 dataset.
+- `data/prices.csv` preserves the original 30-stock research. `data/sp500_historical_2018_2024/` contains the historical membership and prices; the current-constituent snapshot is retained as a biased historical record. See [SP500_DATA.md](SP500_DATA.md).
+- `tests/` contains checks for accounting, metrics, and dataset loading.
 
-## Project Overview
+Run from the project root with the project Python environment:
 
-This project follows a full quantitative research workflow:
+```bash
+python3 -m venv venv
+venv/bin/python -m pip install -r requirements.txt
+venv/bin/python -m unittest discover -s tests -v
+venv/bin/jupyter lab
+```
 
-- Download historical stock price data
-- Build factor signals
-- Rank stocks cross-sectionally
-- Construct monthly rebalanced portfolios
-- Backtest strategies against SPY
-- Evaluate return and risk metrics
-- Run robustness checks and parameter tuning
-- Refactor reusable logic into Python modules
+## Phase 1 — Momentum
 
----
+The initial study ranked a selected 30-stock universe by 252-trading-day momentum and held the top five. Its saved historical results reported a 23.05% CAGR for momentum versus 16.06% for SPY. The original work also found that performance weakened when NVDA was removed. These are research records using the earlier backtest and metric conventions, and should not be directly compared with the corrected results below.
 
-## Repository Structure
+## Phase 2 — Multi-factor research
 
-- `data/` — saved price data, factor tables, holdings history, and performance results
-- `notebooks/` — research notebooks from data download to factor testing
-- `src/` — reusable Python modules for factors, backtesting, metrics, experiments, and visualization
-- `requirements.txt` — project dependencies
+The original experiments added low volatility and a value score. The momentum/low-volatility combination had lower drawdown but lower returns in that sample. In the value weight sweep, 60% momentum / 40% value recorded a 25.72% CAGR and 1.21 Sharpe ratio, the best tested combination by those measures.
 
----
+**The value result is exploratory and look-ahead biased:** one current P/E snapshot was applied to historical dates. The weights were also selected and evaluated on the same data. A valid historical test needs fundamentals dated by when they became available and a separate evaluation period.
 
-## Phase 1: Momentum Strategy
+## Phase 3 — Portfolio evaluation
 
-### Objective
+Notebook 09 uses reconstructed historical S&P 500 membership and adjusted prices over 2018–2024. At each rebalance, momentum and inverse-volatility sizing use data through the previous trading close, and the portfolio is assumed to trade at the formation close. Membership is selected as of the same prior close. The backtest requires 253 consecutive observed prices for momentum and fails if a selected position lacks a holding-period return. Positions drift between rebalances.
 
-Phase 1 tested whether a simple 12-month momentum strategy could outperform SPY.
+Fees apply to each dollar bought and sold, including the initial purchase. Trades and costs use pre-trade wealth, and target weights apply after costs. CAGR uses the number of monthly periods, drawdown includes initial wealth, and Sharpe assumes a zero risk-free rate. Legacy specialized runners and earlier notebook outputs retain old conventions.
 
-Momentum is based on the idea that stocks with strong recent performance may continue to outperform in the near term.
+### Exploratory historical-membership results
 
-### Method
+The evaluation covers 71 monthly periods from February 2019 through December 2024. Membership is reconstructed by a third party and prices combine multiple sources; see [SP500_DATA.md](SP500_DATA.md). Results remain in-sample and are not evidence of future performance.
 
-The strategy calculated 252-trading-day momentum, ranked stocks by momentum score, selected the top-ranked stocks, and rebalanced monthly.
-
-### Results
-
-| Strategy | CAGR | Annual Volatility | Sharpe Ratio | Max Drawdown |
+| Strategy | Cost per trade side | CAGR | Sharpe | Max drawdown |
 |---|---:|---:|---:|---:|
-| Momentum Strategy | 23.05% | 19.84% | 1.14 | -17.75% |
-| SPY | 16.06% | 17.30% | 0.94 | -23.93% |
+| Equal-weight momentum | 0 bps | 22.10% | 0.79 | -26.51% |
+| Equal-weight momentum | 10 bps | 20.99% | 0.76 | -26.81% |
+| Inverse-volatility momentum | 10 bps | 17.76% | 0.68 | -29.68% |
+| SPY | Not modeled | 15.83% | 0.94 | -23.93% |
 
-### Interpretation
+The experiment moves signals to the prior close and changes price data sources; the change in return cannot be attributed to membership alone. The strategy holds five stocks, unlike diversified SPY; trading costs are not applied to the benchmark. Same-close market-on-close execution remains an assumption and slippage, taxes, market impact and delisting proceeds are not fully modeled.
 
-The momentum strategy outperformed SPY across return, Sharpe ratio, and max drawdown.
+Notebook 09 plots rolling 12-month results and prepares past-only momentum and volatility features with next-month labels. Development ends November 2021, December is purged, and the model holdout starts January 2022. Phase 3 outcomes in these years have been inspected, so a later evaluation period would provide a more independent final study.
 
-However, a robustness check showed that performance was heavily influenced by NVDA. After removing NVDA, the strategy’s outperformance became weaker. This showed that strong backtest results can depend heavily on a small number of winners.
+## Phase 4 — Predictive machine learning
 
----
+Notebook 10 uses historical membership and prices to inspect coverage and prepare an exploratory chronological learning table. The older current-constituent snapshot is retained only as a historical record. Next, establish simple return-prediction or cross-sectional ranking baselines, then compare regression, Random Forest, and XGBoost using feature engineering and time-aware validation. Select models and tune parameters using development data only; reserve the later holdout for evaluation.
 
-## Phase 2: Multi-Factor Strategy Expansion
+## Phase 5 — Statistical validation
 
-### Objective
+Compare ML models with simple factor baselines using time-series cross-validation, bootstrap confidence intervals, appropriate hypothesis tests, model stability analysis, and checks for overfitting. Respect dependence across stocks and over time.
 
-Phase 2 expanded the project from a single-factor momentum strategy into a multi-factor framework.
+## Phase 6 — Interactive ML investing platform
 
-The goal was to test whether adding low-volatility and value factors could improve the original momentum strategy.
-
----
-
-## Phase 2A: Momentum + Low Volatility
-
-### Objective
-
-This experiment tested whether adding a low-volatility factor could reduce drawdowns and improve risk-adjusted performance.
-
-### Results
-
-| Strategy | CAGR | Annual Volatility | Sharpe Ratio | Max Drawdown |
-|---|---:|---:|---:|---:|
-| Momentum | 23.05% | 19.84% | 1.14 | -17.75% |
-| Momentum + Low Volatility | 13.94% | 18.09% | 0.80 | -13.49% |
-| SPY | 16.06% | 17.30% | 0.94 | -23.93% |
-
-### Interpretation
-
-Adding low volatility reduced max drawdown from -17.75% to -13.49%, showing better downside protection.
-
-However, the combined strategy had lower CAGR and a lower Sharpe ratio than pure momentum. This suggests that low volatility acted as a defensive overlay, but did not improve overall performance in this universe.
-
----
-
-## Phase 2B: Momentum / Low-Volatility Tuning
-
-This experiment tested different momentum and low-volatility weights.
-
-The results showed that higher momentum weights generally produced stronger returns and Sharpe ratios. Low volatility helped reduce risk, but too much low-volatility exposure weakened upside performance.
-
-The main conclusion was that pure momentum remained stronger than the momentum/low-volatility combinations.
-
----
-
-## Phase 2C: Momentum + Value
-
-### Objective
-
-This experiment added a value factor using P/E ratio.
-
-The goal was to test whether cheaper stocks, based on valuation, could improve the original momentum strategy.
-
-### Results
-
-| Strategy | CAGR | Sharpe Ratio | Max Drawdown |
-|---|---:|---:|---:|
-| Momentum | 23.05% | 1.14 | -17.75% |
-| Momentum + Low Volatility | 13.94% | 0.80 | -13.49% |
-| Momentum + Value | 22.29% | 1.08 | -23.48% |
-| SPY | 16.06% | 0.94 | -23.93% |
-
-### Interpretation
-
-The momentum + value strategy performed better than the momentum + low-volatility strategy and outperformed SPY.
-
-However, it slightly underperformed pure momentum in CAGR and Sharpe ratio. This suggests that value was a more promising complement to momentum than low volatility, but the 50/50 combination was not the best weighting.
-
----
-
-## Phase 2D: Momentum / Value Tuning
-
-This experiment tested different momentum and value weights.
-
-The best tested combination was:
-
-| Strategy | CAGR | Annual Volatility | Sharpe Ratio | Max Drawdown |
-|---|---:|---:|---:|---:|
-| 60% Momentum / 40% Value | 25.72% | 20.53% | 1.21 | -19.84% |
-
-This was the strongest Phase 2 result by both CAGR and Sharpe ratio.
-
-### Interpretation
-
-The results suggest that value can improve the momentum strategy when used as a moderate overlay.
-
-Pure momentum remained strong, but the 60% momentum / 40% value strategy produced better return and risk-adjusted performance than pure momentum in this backtest.
-
----
-
-## Final Phase 2 Summary
-
-Phase 2 showed that adding more factors does not automatically improve a strategy.
-
-Key findings:
-
-- Momentum strongly outperformed SPY.
-- Low volatility reduced drawdown but lowered returns.
-- Value was more useful than low volatility as a complement to momentum.
-- The best tested strategy was 60% momentum and 40% value.
-- The value factor result should be treated as exploratory because it currently uses a static P/E snapshot rather than point-in-time historical fundamentals.
-
----
-
-## Skills Demonstrated
-
-- Python programming
-- pandas and NumPy
-- Quantitative finance research
-- Factor investing
-- Momentum strategy design
-- Low-volatility strategy design
-- Value factor construction
-- Portfolio backtesting
-- Monthly rebalancing
-- Performance evaluation
-- Parameter tuning
-- Robustness testing
-- Data visualization
-- Git/GitHub project organization
-- Modular code refactoring
-
----
-
-## Technologies Used
-
-- Python
-- pandas
-- NumPy
-- yfinance
-- matplotlib
-- Jupyter Notebook
-- Git/GitHub
-
----
-
-## Evaluation Metrics
-
-The strategies are evaluated using:
-
-- CAGR
-- Annual return
-- Annual volatility
-- Sharpe ratio
-- Max drawdown
-
----
+Build a Streamlit application for comparing factor strategies and ML models, with interactive plots, experiment tracking, and reproducible data pipelines. Clearly show assumptions and limitations.
 
 ## Limitations
 
-- The stock universe is limited and may suffer from survivorship bias.
-- Transaction costs and slippage are not yet included.
-- The value factor uses a static P/E snapshot rather than point-in-time historical fundamentals.
-- Parameter tuning was performed on the same historical period, so results may be overfit.
-- SPY is used as the main benchmark, but the strategy universe is a selected group of large-cap stocks.
-
----
-
-## Next Steps
-
-- Add transaction costs and turnover analysis
-- Use point-in-time historical fundamentals for the value factor
-- Add out-of-sample or walk-forward validation
-- Add sector exposure analysis
-- Add risk controls such as max position weight and volatility targeting
-- Save charts into a `reports/figures/` folder
-- Build a Streamlit dashboard for interactive strategy comparison
-- Add unit tests for core functions
-
----
-
-## Project Status
-
-Phase 1 and Phase 2 are complete.
-
-Next phase: risk controls, validation, and dashboard development.
-
----
-
-## Disclaimer
-
-This project is for educational and research purposes only. It is not financial advice or a recommendation to buy or sell any security.
+- Historical index membership is reconstructed from third-party data and may contain errors; incomplete delisted prices, identifier reuse, and missing outcomes can still introduce bias.
+- A stock's missing history may reflect listing dates, ticker changes, or download failures. Adjusted prices and SPY downloads may be revised.
+- Execution at the formation close is assumed after using the previous close for signals; fees do not model slippage, market impact, taxes, financing, or all delisting outcomes.
+- The historical value signal uses a current P/E snapshot and cannot support a valid historical result. Historical fundamentals require availability dates.
+- Earlier parameter tuning and Phase 3 comparisons are in-sample; they do not establish future performance. The legacy specialized runners use older accounting conventions.

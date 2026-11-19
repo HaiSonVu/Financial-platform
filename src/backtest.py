@@ -195,6 +195,7 @@ def run_momentum_low_vol_backtest(
 def run_factor_backtest(
     prices, score_function, top_n=5, strategy_name="Factor Strategy",
     transaction_cost_bps=0, weighting="equal", volatility_window=252,
+    volatility_lag=0,
 ):
     """Monthly buy-and-hold, trading at the close used to calculate the signal.
 
@@ -207,6 +208,8 @@ def run_factor_backtest(
         raise ValueError("Prices must have a sorted, unique date index")
     if not 0 <= transaction_cost_bps < 10000 or top_n < 1:
         raise ValueError("top_n must be positive and transaction_cost_bps in [0, 10000)")
+    if not isinstance(volatility_lag, int) or volatility_lag < 0:
+        raise ValueError("volatility_lag must be a nonnegative integer")
     if weighting not in ("equal", "inverse_volatility"):
         raise ValueError("weighting must be equal or inverse_volatility")
     returns = prices.pct_change(fill_method=None)
@@ -227,8 +230,9 @@ def run_factor_backtest(
         if weighting == "equal":
             target.loc[selected] = 1 / len(selected)
         else:
-            vol = current_returns.loc[:, selected].tail(volatility_window).std()
-            if vol.isna().any() or (vol <= 0).any() or len(current_returns.tail(volatility_window)) < volatility_window:
+            volatility_returns = current_returns.iloc[:-volatility_lag] if volatility_lag else current_returns
+            vol = volatility_returns.loc[:, selected].tail(volatility_window).std()
+            if vol.isna().any() or (vol <= 0).any() or len(volatility_returns.tail(volatility_window)) < volatility_window:
                 raise ValueError(f"Insufficient or zero volatility at {formation_date}")
             inverse = 1 / vol
             target.loc[selected] = inverse / inverse.sum()
@@ -371,3 +375,23 @@ def calculate_turnover(
         current_weights - previous_weights
     ).abs().sum()
 
+
+
+def point_in_time_momentum_score(current_prices, current_returns, formation_date,
+                                 membership, lookback=252):
+    """Rank members known at the prior close, for execution at formation close.
+
+    Requires lookback+1 consecutive, observed prices per security. The latest
+    close is deliberately excluded, so it cannot influence the closing trade.
+    """
+    from src.data_loader import constituents_as_of
+
+    signal_prices = current_prices.iloc[:-1]
+    if len(signal_prices) < lookback + 1:
+        return pd.Series(dtype=float)
+    signal_date = signal_prices.index[-1]
+    members = constituents_as_of(membership, signal_date)
+    eligible = signal_prices.tail(lookback + 1).notna().all()
+    score = calculate_momentum(signal_prices, lookback).iloc[-1]
+    score = zscore_factor(score.where(eligible & score.index.isin(members)))
+    return score
