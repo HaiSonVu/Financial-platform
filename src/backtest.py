@@ -195,7 +195,7 @@ def run_momentum_low_vol_backtest(
 def run_factor_backtest(
     prices, score_function, top_n=5, strategy_name="Factor Strategy",
     transaction_cost_bps=0, weighting="equal", volatility_window=252,
-    volatility_lag=0,
+    volatility_lag=0, corporate_actions=None,
 ):
     """Monthly buy-and-hold, trading at the close used to calculate the signal.
 
@@ -212,6 +212,14 @@ def run_factor_backtest(
         raise ValueError("volatility_lag must be a nonnegative integer")
     if weighting not in ("equal", "inverse_volatility"):
         raise ValueError("weighting must be equal or inverse_volatility")
+    actions = []
+    for action in corporate_actions or []:
+        event = dict(action)
+        event['date'] = pd.Timestamp(event['date'])
+        if (event['old'] not in prices.columns or event['new'] not in prices.columns
+                or event['old'] == event['new'] or event.get('ratio', 1) <= 0):
+            raise ValueError("Invalid corporate-action ticker or conversion ratio")
+        actions.append(event)
     returns = prices.pct_change(fill_method=None)
     month_ends = prices.resample("ME").last().index
     records, holdings_records, portfolio_returns, dates = [], [], [], []
@@ -251,15 +259,39 @@ def run_factor_backtest(
         trades = net_fraction * target - previous
         buys, sells = trades.clip(lower=0).sum(), -trades.clip(upper=0).sum()
         cost = rate * (buys + sells)
-        period = returns.loc[(returns.index > formation_date) & (returns.index <= next_date), selected]
+        period = returns.loc[(returns.index > formation_date) & (returns.index <= next_date), selected].copy()
+        conversions = []
+        for event in actions:
+            old_symbol, new_symbol = event['old'], event['new']
+            event_date = event['date']
+            if old_symbol not in selected or not (formation_date < event_date <= next_date):
+                continue
+            if event_date not in period.index:
+                raise ValueError(f"Conversion date {event_date} is not a trading date")
+            prior_pos = prices.index.get_loc(event_date) - 1
+            if prior_pos < 0:
+                raise ValueError("Conversion has no prior trading date")
+            old_close = prices.iloc[prior_pos][old_symbol]
+            new_close = prices.loc[event_date, new_symbol]
+            if pd.isna(old_close) or pd.isna(new_close) or old_close <= 0 or new_close <= 0:
+                raise ValueError(f"Missing conversion prices for {old_symbol} on {event_date}")
+            # Explicit one-for-one (or documented ratio) share conversion; no trade.
+            period.loc[event_date, old_symbol] = event.get('ratio', 1) * new_close / old_close - 1
+            later = period.index > event_date
+            period.loc[later, old_symbol] = returns.loc[period.index[later], new_symbol]
+            conversions.append((old_symbol, new_symbol))
         if period.empty or period.isna().any().any():
-            raise ValueError(f"Missing holding-period returns after {formation_date}")
+            missing = period.columns[period.isna().any()].tolist()
+            raise ValueError(f"Missing holding-period returns after {formation_date}: {missing}")
         growth = (1 + period).prod()
         gross_growth = (target.loc[selected] * growth).sum()
         if gross_growth <= 0:
             raise ValueError("Portfolio wealth must remain positive")
         previous = pd.Series(0.0, index=prices.columns)
         previous.loc[selected] = target.loc[selected] * growth / gross_growth
+        for old_symbol, new_symbol in conversions:
+            previous.loc[new_symbol] += previous.loc[old_symbol]
+            previous.loc[old_symbol] = 0.0
         gross_return = gross_growth - 1
         net_return = net_fraction * gross_growth - 1
         holdings_records.append({"formation_date": formation_date, "holding_until": next_date,

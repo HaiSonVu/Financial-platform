@@ -6,7 +6,7 @@ An educational Python project for researching factor strategies, realistic portf
 
 - `src/` contains data loading, factor scores, backtesting, metrics, experiments, and visualization.
 - `notebooks/01`–`07` contain the original Phase 1–2 work. `08` is the superseded cost experiment, `09` is the corrected Phase 3 evaluation, and `10` explores the larger Phase 4 dataset.
-- `data/prices.csv` preserves the original 30-stock research. `data/sp500_historical_2018_2024/` contains the historical membership and prices; the current-constituent snapshot is retained as a biased historical record. See [SP500_DATA.md](SP500_DATA.md).
+- `data/prices.csv` preserves the original 30-stock research. `data/sp500_historical_2018_2024/` contains the historical membership and prices for Phase 3; `data/sp500_historical_2010_2024/` extends the same source for Phase 4; the current-constituent snapshot is retained as a biased historical record. See [SP500_DATA.md](SP500_DATA.md).
 - `tests/` contains checks for accounting, metrics, and dataset loading.
 
 Run from the project root with the project Python environment:
@@ -51,7 +51,11 @@ Notebook 09 plots rolling 12-month results and prepares past-only momentum and v
 
 ## Phase 4 — Predictive machine learning
 
-Notebook 10 uses historical membership and prices to inspect coverage and prepare an exploratory chronological learning table. The older current-constituent snapshot is retained only as a historical record. Next, establish simple return-prediction or cross-sectional ranking baselines, then compare regression, Random Forest, and XGBoost using feature engineering and time-aware validation. Select models and tune parameters using development data only; reserve the later holdout for evaluation.
+Notebook 10 uses historical membership and prices to build four past-only features (6-month momentum, 12–1 momentum, 63-day volatility, and 21-day reversal) and next-month return labels. It checks the panel and uses 2011–November 2018 for training, January 2019–November 2021 for validation, and January 2022–November 2024 for test; December 2018 and December 2021 are purged. The scaler and final Ridge model are fit on training data only; the penalty is selected by validation MSE (alpha 0.1).
+
+The test-period mean monthly Spearman rank IC was **-0.0387** across 35 months, with 40% of months positive. Test Ridge MSE was 0.008685 compared with 0.008704 for zero-return predictions and 0.008671 for the training-mean baseline. IC excludes missing realized returns, including a Discovery Series C outcome spanning its conversion.
+
+A five-stock test-period backtest at 10 bps per trade side returned **-29.89% CAGR** for the Ridge ranking versus **14.80% CAGR** for a 12–1 momentum ranking, using the same historically eligible, feature-complete stock universe. These are concentrated portfolios: maximum drawdowns were -72.30% and -26.63%, respectively. Discovery Series C (DISCK) is converted one-for-one into WBD on 2022-04-11 with no trading fee, based on the [SEC filing](https://www.sec.gov/Archives/edgar/data/1437107/000119312522103051/d328161d8k.htm). Other unresolved missing prices stop the run. Exact formation-close execution and adjusted-price consistency across the conversion are assumptions. The 35-month results are exploratory, the test years were inspected during earlier Phase 3 research, and missing outcomes, data-source errors, and unmodeled corporate actions can bias the comparison. Next assess stability and alternative models with time-aware validation and a later independent period where possible.
 
 ## Phase 5 — Statistical validation
 
